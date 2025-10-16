@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Currency & Crypto Converter</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f4f4f4;
+      color: #333;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    .card {
+      background: #fff;
+      padding: 2rem;
+      border-radius: 1rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 420px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 1.5rem;
+      font-size: 1.5rem;
+    }
+    label {
+      display: block;
+      margin-top: 1rem;
+      font-weight: 500;
+    }
+    select, input {
+      width: 100%;
+      padding: 0.6rem;
+      font-size: 1rem;
+      margin-top: 0.3rem;
+      border: 1px solid #ccc;
+      border-radius: 0.5rem;
+    }
+    button {
+      width: 100%;
+      margin-top: 1.5rem;
+      padding: 0.8rem;
+      font-size: 1rem;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 0.5rem;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056d2;
+    }
+    .result {
+      margin-top: 1.5rem;
+      text-align: center;
+      font-size: 1.1rem;
+    }
+    .rate {
+      color: #555;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Currency & Crypto Converter</h1>
+
+    <label for="amount">Amount:</label>
+    <input type="number" id="amount" value="1" min="0" step="any" />
+
+    <label for="from">From:</label>
+    <select id="from"></select>
+
+    <label for="to">To:</label>
+    <select id="to"></select>
+
+    <button id="convertBtn">Convert</button>
+
+    <div class="result" id="result"></div>
+    <div class="rate" id="rate"></div>
+  </div>
+
+  <script>
+    const fiatList = ["USD","EUR","GBP","JPY","INR","AUD","CAD"];
+    const cryptoList = ["BTC","ETH","USDT","BNB","SOL","XRP"];
+    const allCurrencies = [...fiatList, ...cryptoList];
+
+    const fromSelect = document.getElementById('from');
+    const toSelect = document.getElementById('to');
+    const amountInput = document.getElementById('amount');
+    const convertBtn = document.getElementById('convertBtn');
+    const resultDiv = document.getElementById('result');
+    const rateDiv = document.getElementById('rate');
+
+    // Populate dropdowns
+    allCurrencies.forEach(c => {
+      const opt1 = document.createElement('option');
+      opt1.value = c;
+      opt1.textContent = c;
+      fromSelect.appendChild(opt1);
+
+      const opt2 = document.createElement('option');
+      opt2.value = c;
+      opt2.textContent = c;
+      toSelect.appendChild(opt2);
+    });
+    fromSelect.value = 'USD';
+    toSelect.value = 'BTC';
+
+    // Helper: determine if crypto
+    function isCrypto(sym) {
+      return cryptoList.includes(sym);
+    }
+
+    async function getFiatRate(from, to) {
+      const url = `https://api.exchangerate.host/convert?from=${from}&to=${to}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      return data.result;
+    }
+
+    async function getCryptoPrice(coinId, vsCurrency) {
+      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=${vsCurrency}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      return data[coinId][vsCurrency.toLowerCase()];
+    }
+
+    // Map symbol → CoinGecko id
+    const coinMap = {
+      BTC: 'bitcoin',
+      ETH: 'ethereum',
+      USDT: 'tether',
+      BNB: 'binancecoin',
+      SOL: 'solana',
+      XRP: 'ripple'
+    };
+
+    async function convert() {
+      const from = fromSelect.value;
+      const to = toSelect.value;
+      const amount = parseFloat(amountInput.value);
+      if (!amount || amount <= 0) {
+        resultDiv.textContent = "Please enter a valid amount.";
+        return;
+      }
+
+      resultDiv.textContent = "Converting...";
+      rateDiv.textContent = "";
+
+      try {
+        let rate = 0;
+
+        if (!isCrypto(from) && !isCrypto(to)) {
+          // fiat → fiat
+          rate = await getFiatRate(from, to);
+        } else if (isCrypto(from) && !isCrypto(to)) {
+          // crypto → fiat
+          const price = await getCryptoPrice(coinMap[from], to);
+          rate = price;
+        } else if (!isCrypto(from) && isCrypto(to)) {
+          // fiat → crypto
+          const price = await getCryptoPrice(coinMap[to], from);
+          rate = 1 / price;
+        } else {
+          // crypto → crypto
+          const p1 = await getCryptoPrice(coinMap[from], 'usd');
+          const p2 = await getCryptoPrice(coinMap[to], 'usd');
+          rate = p1 / p2;
+        }
+
+        const result = amount * rate;
+        resultDiv.innerHTML = `<strong>${amount} ${from}</strong> = <strong>${result.toFixed(6)} ${to}</strong>`;
+        rateDiv.textContent = `Rate: 1 ${from} = ${rate.toFixed(6)} ${to}`;
+      } catch (err) {
+        resultDiv.textContent = "Error fetching rates.";
+        console.error(err);
+      }
+    }
+
+    convertBtn.addEventListener('click', convert);
+  </script>
+</body>
+</html>
